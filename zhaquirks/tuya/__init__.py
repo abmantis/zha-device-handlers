@@ -1456,6 +1456,38 @@ class DPToAttributeMapping:
     converter: Callable[[Any], Any] | None = None
     endpoint_id: int | None = None
 
+    def decompose_attributes(self) -> list[DPToAttributeMapping]:
+        """Decompose a tuple of attribute names into a list of attribute mappings with one attribute each."""
+        if not isinstance(self.attribute_name, tuple):
+            return [self]
+
+        def wrap_converter(converter, index):
+            def wrapped_converter(value):
+                result_tuple = converter(value)
+                return result_tuple[index]
+
+            return wrapped_converter
+
+        return [
+            DPToAttributeMapping(
+                ep_attribute=self.ep_attribute,
+                attribute_name=attr,
+                converter=wrap_converter(self.converter, index),
+                endpoint_id=self.endpoint_id,
+            )
+            for index, attr in enumerate(self.attribute_name)
+        ]
+
+        # return [
+        #     DPToAttributeMapping(
+        #         ep_attribute=self.ep_attribute,
+        #         attribute_name=attr,
+        #         converter=self.converter,
+        #         endpoint_id=self.endpoint_id,
+        #     )
+        #     for attr in self.attribute_name
+        # ]
+
 
 @dataclasses.dataclass
 class AttributeWithMask:
@@ -1528,8 +1560,14 @@ class TuyaNewManufCluster(CustomCluster):
         super().__init__(*args, **kwargs)
 
         self._dp_to_attributes: dict[int, list[DPToAttributeMapping]] = {
-            dp: attr if isinstance(attr, list) else [attr]
-            for dp, attr in self.dp_to_attribute.items()
+            dp: [
+                decomp_attr
+                for attr in attrs
+                for decomp_attr in attr.decompose_attributes()
+            ]
+            if isinstance(attrs, list)
+            else attrs.decompose_attributes()
+            for dp, attrs in self.dp_to_attribute.items()
         }
         for dp_map in self._dp_to_attributes.values():
             # get the endpoint that is being mapped to

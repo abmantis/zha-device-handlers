@@ -46,6 +46,29 @@ class DPToAttributeMapping:
     dp_converter: Callable[[Any], Any] | None = None
     endpoint_id: int | None = None
 
+    def decompose_attributes(self) -> list[DPToAttributeMapping]:
+        """Decompose a tuple of attribute names into a list of attribute mappings with one attribute each."""
+        if not isinstance(self.attribute_name, tuple):
+            return [self]
+
+        def wrap_converter(converter, index):
+            def wrapped_converter(value):
+                result_tuple = converter(value)
+                return result_tuple[index]
+
+            return wrapped_converter
+
+        return [
+            DPToAttributeMapping(
+                ep_attribute=self.ep_attribute,
+                attribute_name=attr,
+                converter=wrap_converter(self.converter, index),
+                dp_converter=self.dp_converter,
+                endpoint_id=self.endpoint_id,
+            )
+            for index, attr in enumerate(self.attribute_name)
+        ]
+
 
 class TuyaClusterData(t.Struct):
     """Tuya cluster data."""
